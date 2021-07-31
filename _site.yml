@@ -1,8 +1,8 @@
 name: "my-website"
 navbar:
-  title: "My Website"
+  title: "Synopticz's Website"
   left:
     - text: "Home"
       href: index.html
-    - text: "About"
+    - text: "ACX 2021 Survey Results"
       href: about.html
