@@ -1,0 +1,1443 @@
+---
+title: "Interest in Biostasis: Much More Than You Wanted to Know"
+subtitle: 'Results from the ACX 2021 Biostasis/Cryonics Survey'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(rstanarm)
+library(bayestestR)
+library(psych)
+library(knitr)
+library(cowplot)
+
+res$knowledge_source = res$What.is.your.main.source.of.knowledge.about.biostasis..
+res$could_imagine_cryo = res$Could.you.imagine.electing.to.undergo.some.biostasis.procedure.at.the.time.of.your.legal.death...
+res$current_cryo = res$Are.you.currently.signed.up.for.a.biostasis.procedure.such.as.cryonics...
+res$imagine_closest_friends = res$Imagine.that.your.five.closest.friends.or.family.members.were.all.signed.up.for.biostasis..How.much.would.that.affect.your.desire.for.signing.up.yourself..
+res$imagine_free = res$Imagine.that.choosing.the.biostasis.procedure.were.free..How.much.would.that.affect.your.desire.for.signing.up.yourself..
+res$imagine_LTM = res$Imagine.that.a.consensus.of.neuroscientists.thought.that.an.available.biostasis.procedure.would.almost.certainly.preserve.the.information.content.of.long.term.memories..How.much.would.that.affect.your.desire.for.signing.up.yourself..
+res$imagine_mammal = res$Imagine.that.it.were.possible.to.preserve.and.revive.a.very.small.mammal..How.much.would.that.affect.your.desire.for.signing.up.yourself..
+res$main_reason_no = res$Regardless.of.whether.you.have.already.signed.up..what.is.the.strongest.reason.against.electing.for.biostasis.for.yourself.
+res$reasons_against = res$Which.do.you.consider.strong.reasons.against.electing.for.biostasis.for.yourself...Choose.any.and.all.that.apply....
+res$terminal_illness = res$Some.people.have.argued.that.patients.with.terminal.illnesses.should.be.allowed.to.start.biostasis.procedures.just.prior.to.legal.death..in.order.to.prevent.further.brain.degradation..Do.you.think.this.should.be.allowed.
+res$organization = res$If.you.are.considering.or.signed.up.for.biostasis..which.organization.would.you.choose.have.you.chosen.
+res$eternal_youth = as.numeric(gsub("%", "", res$What.is.your.estimate.of.the.probability.that.technology.to.sustain.you.in..eternal.youth..will.arrive.before.your.death..I.e...that.you.will.achieve.longevity.escape.velocity..Answer.on.a.scale.from.0...definitely.false..to.100...definitely.true..., fixed = TRUE))
+res$eternal_youth = as.numeric(gsub("144000", NA, res$eternal_youth))
+
+res$biostasis_info = as.numeric(gsub("%", "", res$What.is.your.estimate.of.the.probability.that.a.currently.available.biostasis.procedure.will.in.an.ideal.case.preserve.the.information.necessary.for.you.to.theoretically.be.revived.in.the.far.future..Independently.of.whether.that.revival.will.actually.happen..Answer.on.a.scale.from.0...definitely.false..to.100...definitely.true..., fixed = TRUE))
+res$biostasis_org_stability = as.numeric(gsub("%", "", res$What.is.your.estimate.of.the.probability.the.biostasis.organization.you.choose.will.stay.in.existence.and.keep.you.in.biostasis.for.at.least.200.years.or.until.you.are.able.to.be.revived..whichever.comes.first..Answer.on.a.scale.from.0...definitely.false..to.100...definitely.true..., fixed = TRUE))
+res$biostasis_org_stability = as.numeric(gsub("100100", NA, res$biostasis_org_stability)) #remove incorrect entry
+res$biostasis_org_stability = as.numeric(gsub("1010", NA, res$biostasis_org_stability)) #remove incorrect entry
+res$biostasis_work_prob = as.numeric(gsub("%", "", res$What.is.your.estimate.of.the.overall.probability.that.an.average.person.today.who.undergoes.biostasis.with.an.existing.procedure.and.an.existing.biostasis.organization.will.be.successfully.revived.at.some.future.time..Answer.on.a.scale.from.0...definitely.false..to.100...definitely.true..., fixed = TRUE))
+
+res$q_posterior_circ = res$Which.of.the.following.is.a.major.artery.supplying.the.posterior.circulation.of.the.brain.
+res$q_posterior_circ_correct = ifelse(res$q_posterior_circ == "vertebral artery", 1, 0)
+res$q_anterior_circ = res$Which.of.the.following.is.a.major.artery.supplying.the.anterior.circulation.of.the.brain.
+res$q_anterior_circ_correct = ifelse(res$q_anterior_circ == "internal carotid artery", 1, 0)
+res$q_celltypes = res$Which.of.the.following.cell.types.have.been.shown.to.play.a.role.in.patterns.of.electrical.signaling.in.the.brain.
+res$q_celltypes_correct = ifelse(res$q_celltypes == "all of the above", 1, 0)
+res$q_whitematter = res$Which.of.the.following.is.NOT.a.major.constituent.of.the.white.matter.of.the.brain.
+res$q_whitematter_correct = ifelse(res$q_whitematter == "neuron cell bodies", 1, 0)
+res$q_twofactor = res$According.to.the.two.factor.hypothesis.of.freezing.injury.in.cryobiology..what.is.the.main.problem.with.cooling.cells.too.slowly.during.cryopreservation.by.cooling.
+res$q_twofactor_correct = ifelse(res$q_twofactor == "changes in solution composition leading to cell toxicity", 1, 0)
+res$q_coolquick = res$What.is.the.main.problem.with.cooling.cells.too.quickly.during.cryopreservation.by.cooling.
+res$q_coolquick_correct = ifelse(res$q_coolquick == "intracellular ice formation leading to mechanical injury", 1, 0)
+res$q_recrystal = res$Recrystallization.refers.to.the.transfer.of.water.molecules.from.small.ice.crystals.to.larger.ones..What.is.the.general.effect.of.recrystallization.on.biological.tissues.during.a.cooling.and.thawing.procedure..
+res$q_recrystal_correct = ifelse(res$q_recrystal == "damaging because larger ice crystals tend to be more harmful", 1, 0)
+res$q_vitrifythermo = res$Compared.to.cooling.without.cryoprotectants..why.is.vitrification.useful.in.preserving.biological.tissues.
+res$q_vitrifythermo_correct = ifelse(res$q_vitrifythermo == "the natural thermodynamic state of aqueous tissue solutions is relatively disordered, and vitrification maintains this", 1, 0)
+res$neuro_questions_correct = rowSums(cbind(res$q_posterior_circ_correct, res$q_anterior_circ_correct, res$q_celltypes_correct, res$q_whitematter_correct))
+res$cryo_questions_correct = rowSums(cbind(res$q_twofactor_correct, res$q_coolquick_correct, res$q_recrystal_correct, res$q_vitrifythermo_correct))
+res$total_questions_correct = rowSums(cbind(res$neuro_questions_correct, res$cryo_questions_correct))
+
+res$heard_of = ifelse(res$`What.is.your.main.source.of.knowledge.about.biostasis..` == "Not applicable (haven't heard about it)", 0, 1)
+cor.test(res$heard_of, res$total_questions_correct) #highly significant
+
+res$signup_n = as.numeric(factor(res$`Are.you.currently.signed.up.for.a.biostasis.procedure.such.as.cryonics...`,
+	levels = c("No, and I don't intend to", "Never thought about it/Unsure", "No, but I'm thinking about it", "No, but I plan to", "No, but I'm in the process of doing so", "Yes")))
+res$could_imagine_cryo_n = as.numeric(factor(res$could_imagine_cryo,
+  levels = c("No", "Most likely no", "Unsure", "Mostly likely yes", "Yes")))
+res$imagine_closest_friends_n = as.numeric(factor(res$imagine_closest_friends,
+  levels = c("Less interested", "No change in interest", "A little bit more interested",
+  "More interested", "Way more interested")))
+res$imagine_LTM_n = as.numeric(factor(res$imagine_LTM,
+  levels = c("Less interested", "No change in interest", "A little bit more interested",
+  "More interested", "Way more interested")))
+res$imagine_mammal_n = as.numeric(factor(res$imagine_mammal,
+  levels = c("Less interested", "No change in interest", "A little bit more interested",
+  "More interested", "Way more interested")))
+res$imagine_free_n = as.numeric(factor(res$imagine_free,
+  levels = c("Less interested", "No change in interest", "A little bit more interested",
+  "More interested", "Way more interested")))
+res$terminal_illness_n = as.numeric(factor(res$terminal_illness,
+  levels = c("Strongly Disagree", "Disagree", "Unsure",
+  "Agree", "Strongly Agree")))
+
+survey_res = merge(demo, res, by.x = "First..get.a.User.ID", by.y = "What.is.your.User.ID..", all.y = TRUE)
+
+survey_res$Age = as.numeric(gsub(5000, NA, survey_res$Age))
+
+survey_res$reason_against_clean = ifelse(!survey_res$Regardless.of.whether.you.have.already.signed.up..what.is.the.strongest.reason.against.electing.for.biostasis.for.yourself. %in%
+  c("I am worried about being socially unaccepted/ostracized due to my decision",
+  "It is selfish (for example, due to overpopulation or unequal access)",
+  "Religious reasons", "It is a logistical hassle",
+  "Long-term instability of the biostasis organization",
+  "I am worried about being revived in an unfavorable condition/state",
+  "It is too expensive (most biostasis procedures currently cost around $30,000 - $200,000)",
+  "There is not enough scientific validation that the procedure will preserve neural features necessary for long-term memory and identity",
+  NA), NA,
+  survey_res$Regardless.of.whether.you.have.already.signed.up..what.is.the.strongest.reason.against.electing.for.biostasis.for.yourself.)
+
+survey_res$Profession_whitecollar_ref_ = relevel(as.factor(survey_res$Profession), ref="Other \"white collar\"")
+survey_res$Degree_bachelors_ref_ = relevel(as.factor(survey_res$Degree), ref="Bachelor\'s")
+survey_res$knowledge_source_cleaned = ifelse(!survey_res$knowledge_source %in% c("Wikipedia", "TV, film, or YouTube",
+"Reddit", "Other internet sources", "Not applicable (haven't heard about it)", "Friends, coworkers, or relatives",
+"Cryonics organization websites", "Books", "Academic research articles", NA), "Other", survey_res$knowledge_source)
+survey_res$knowledge_source_cleaned_ref_books_ = relevel(as.factor(survey_res$knowledge_source_cleaned), ref = "Books")
+survey_res$Political_Affiliation_ref_socialdemocrat_ = relevel(as.factor(survey_res$Political.Affiliation),
+  ref = "Social democratic, for example Scandinavian countries: heavily-regulated market economy, cradle-to-grave social safety net, socially permissive multiculturalism")
+
+survey_res$religious_denom_cleaned = ifelse(!survey_res$Religious.Denomination %in% c("Christian (Protestant)", "Christian (Catholic)", "Mixed / Other / I really want to put \"no religion\" instead of skipping the question like you asked",
+  "Jewish", "Unitarian Universalism or similar", "Buddhist", "Christian (Mormon)",
+  "Christian (Other non-Protestant, eg Eastern Orthodox)", "Hindu", NA), "Random_Other", survey_res$Religious.Denomination)
+survey_res$religious_denom_cleaned = gsub("Mixed / Other / I really want to put \"no religion\" instead of skipping the question like you asked", NA, survey_res$religious_denom_cleaned)
+survey_res$religious_denom_ref_WriteIn_ = relevel(as.factor(survey_res$religious_denom_cleaned),  "Random_Other")
+
+survey_res$Religious_Views_Agnostic_refe_ = relevel(as.factor(survey_res$Religious.Views), ref="Agnostic")
+
+survey_res$American_party_ref_nonUS_ = relevel(as.factor(survey_res$American.Parties),
+  "(option for non-Americans who want an option)")
+
+survey_res$organization_cleaned = ifelse(!survey_res$organization %in% c("Not applicable/none", "Alcor (Scottsdale, Arizona, USA)",
+"Cryonics Institute (Clinton Township, Michigan, USA)", "Tomorrow Biostasis (Berlin, Germany)", "Cryonics Germany (Dresden, Germany)",
+"KrioRus (Moscow, Russia)", NA), "Other", survey_res$organization)
+survey_res$organization_cleaned_ref_nanone_ = relevel(as.factor(survey_res$organization_cleaned), ref = "Not applicable/none")
+
+countries = table(survey_res$Country)
+#dput(names(sort(countries))) keeping countries with >=10 entries
+survey_res$country_clean = ifelse(!survey_res$Country %in% c("Italy", "Netherlands",
+"Ireland", "Spain", "Ukraine", "Norway", "Switzerland", "Denmark",
+"Finland", "Poland", "Israel", "Sweden", "Russia", "New Zealand",
+"France", "Australia", "Germany", "Canada", "United Kingdom",
+"United States", NA), "Other", survey_res$Country)
+survey_res$country_clean_ref_Other_ = relevel(as.factor(survey_res$country_clean),
+"Other")
+
+survey_res$State = gsub(" ", "", survey_res$State)
+# dput(names(sort(table(survey_res$State)))) keeping states with >=10 entries
+survey_res$state_clean = ifelse(!survey_res$State %in% c("Kansas", "Indiana", "SouthCarolina",
+"Connecticut", "NewHampshire", "Missouri", "Utah", "Tennessee",
+"Minnesota", "Michigan", "NewMexico", "Arizona", "Georgia", "Colorado",
+"NorthCarolina", "Ohio", "Florida", "NewJersey", "Oregon", "Wisconsin",
+"Maryland", "Virginia", "Illinois", "Pennsylvania", "Texas",
+"Massachusetts", "Washington", "NewYork", "California", NA), "Other", survey_res$State)
+survey_res$state_clean_ref_Other_ = relevel(as.factor(survey_res$state_clean),
+"Other")
+
+survey_res$Work_Status_ref_forprofit_ = relevel(as.factor(survey_res$Work.Status),
+"For-profit work")
+
+survey_res$Race_NH_White_ref_ = relevel(as.factor(survey_res$Race), ref="White (non-Hispanic)")
+
+survey_res$OCD_omni = ifelse(survey_res$OCD ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$OCD_dx = ifelse(survey_res$OCD ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Depression_omni = ifelse(survey_res$Depression ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Depression_dx = ifelse(survey_res$Depression ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Anxiety_omni = ifelse(survey_res$Anxiety ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Anxiety_dx = ifelse(survey_res$Anxiety ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Eating_disorder_omni = ifelse(survey_res$Eating.disorder ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Eating_disorder_dx = ifelse(survey_res$Eating.disorder ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$PTSD_omni = ifelse(survey_res$PTSD ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$PTSD_dx = ifelse(survey_res$PTSD ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$AlcoholUD_omni = ifelse(survey_res$Alcoholism ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$AlcoholUD_dx = ifelse(survey_res$Alcoholism ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$SubstanceUD_omni = ifelse(survey_res$Drug.addiction ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$SubstanceUD_dx = ifelse(survey_res$Drug.addiction ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Borderline_omni = ifelse(survey_res$Borderline ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Borderline_dx = ifelse(survey_res$Borderline ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Bipolar_omni = ifelse(survey_res$Bipolar ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Bipolar_dx = ifelse(survey_res$Bipolar ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Autism_omni = ifelse(survey_res$Autism ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Autism_dx = ifelse(survey_res$Autism ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$ADHD_omni = ifelse(survey_res$ADHD ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$ADHD_dx = ifelse(survey_res$ADHD ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Schizophrenia_omni = ifelse(survey_res$Schizophrenia ==
+  c("I think I might have this condition, although I have never been formally diagnosed",
+  "I have a formal diagnosis of this condition"), 1, 0)
+survey_res$Schizophrenia_dx = ifelse(survey_res$Schizophrenia ==
+  c("I have a formal diagnosis of this condition"), 1, 0)
+
+survey_res$other_reasons = survey_res$Which.do.you.consider.strong.reasons.against.electing.for.biostasis.for.yourself...Choose.any.and.all.that.apply....
+survey_res$unfavorable_condition = grepl("I am worried about being revived in an unfavorable condition/state", survey_res$other_reasons, fixed = TRUE)
+survey_res$social_unacceptance = grepl("I am worried about being socially unaccepted/ostracized due to my decision", survey_res$other_reasons, fixed = TRUE)
+survey_res$logistical_hassle = grepl("It is a logistical hassle", survey_res$other_reasons, fixed = TRUE)
+survey_res$selfish = grepl("It is selfish (for example, due to overpopulation or unequal access)", survey_res$other_reasons, fixed = TRUE)
+survey_res$too_expensive = grepl("It is too expensive (most biostasis procedures currently cost around $30,000 - $200,000)", survey_res$other_reasons, fixed = TRUE)
+survey_res$long_term_org_instability = grepl("Long-term instability of the biostasis organization", survey_res$other_reasons, fixed = TRUE)
+survey_res$religious_reasons = grepl("Religious reasons", survey_res$other_reasons, fixed = TRUE)
+survey_res$not_enough_scientific_support = grepl("There is not enough scientific validation that the procedure will preserve neural features necessary for long-term memory and identity", survey_res$other_reasons, fixed = TRUE)
+
+```
+
+## Motivation
+
+My motivation for doing this survey is simple: I’m continuously surprised that I’m one of the few people in the world who is obsessed with the problem of how to preserve people with the goal of reviving them in the future. It’s a potential solution to one of humanity’s oldest and most vexing problems and, yet, so few people seem to care. My goal with this survey is to better understand why people are hesitant towards or even against biostasis.
+
+_Note_: Biostasis is a generalization of the term cryonics to include preservation technologies that don’t necessarily use cold temperatures. It’s also semantics; a bit of rebranding for a term with some unfortunate connotations. I use the terms biostasis and cryonics interchangeably.
+
+Links:
+[Main survey page](https://astralcodexten.substack.com/p/please-take-the-reader-survey), [Demographic questions](https://docs.google.com/forms/d/e/1FAIpQLSdHhuq1Ca3pWx8oYubGOyNgEAzrfzF7wM3FEyBVoCW6IAYM1g/viewform), [Biostasis/cryonics questions](https://docs.google.com/forms/d/e/1FAIpQLSdHhuq1Ca3pWx8oYubGOyNgEAzrfzF7wM3FEyBVoCW6IAYM1g/viewform)
+
+Previous surveys:
+[Gillett and colleagues 2021](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0244980),
+[Kaiser and colleagues 2014](https://www.cambridge.org/core/journals/international-journal-of-technology-assessment-in-health-care/article/abs/attitudes-and-acceptance-toward-the-technology-of-cryonics-in-germany/5C7D20D13CAF8DC40B37DE38E8D73DA9), [LW 2016 Survey](https://www.brainpreservation.org/interest-in-cryonics-from-the-less-wrong-2016-survey/), [Reddit 2019 survey](https://www.reddit.com/r/cryonics/comments/eimfut/biostasis_and_cryonics_survey_2019_results/)
+
+## Highlights
+
+* Replication of well-known associations of increased interest in biostasis: younger people; non-religious people; non-spiritual people; transgender women and cisgender men; and people in computer-related professions.
+* People who are actually signed up for biostasis have higher average scores on knowledge questions about cryobiology than people who are not signed up.
+* People with libertarian and liberal politics are the most consistently interested in and supportive of biostasis. People with conservative and alt-right politics are the most consistently uninterested and unsupportive of biostasis.
+* People with a diagnosis of bipolar disorder and autism are more interested in biostasis, while those with a diagnosis of depression are less interested.
+* There is a cluster of pro-biostasis and related beliefs all positively correlated with one another: being more likely to be signed up or interested in it, being more able to imagine it, assigning a higher probability it will work, assigning a higher probability of [longevity escape velocity](https://en.wikipedia.org/wiki/Longevity_escape_velocity), et cetera. One could think of this as a type of "mood affiliation."
+* Of people’s biggest concern about biostasis, religious reasons or selfishness are correlated with the least interest; people most concerned about lack of scientific validation or the possibility of unfavorable revival conditions are slightly more interested; and people most concerned with cost, logistic problems, social ostracism, or organizational stability are the most interested in biostasis.
+* About half of respondents are concerned about being revived in an unfavorable condition/state. People endorsing this concern are more likely to say that they would be more interested in biostasis if their closest friends/family signed up.
+
+## Thank you
+
+A sincere thank you to everyone who filled the survey out and to Scott for posting it.
+
+## Obvious biases are obvious
+
+All results are biased by the referral source of people who read Astral Codex Ten (ACX) and choose to complete an online survey about this topic.
+
+I personally am interested in biostasis and think it's a good idea. Despite my best intentions to be unbiased, this clearly affects the way I ran the survey and analysis.
+
+## Interest in cryonics
+
+<b>Survey Question: Are you currently signed up for a biostasis procedure such as cryonics?</b>
+
+```{r, echo=FALSE}
+survey_res$signup_chars = factor(res$`Are.you.currently.signed.up.for.a.biostasis.procedure.such.as.cryonics...`,
+	levels = c("No, and I don't intend to", "Never thought about it/Unsure", "No, but I'm thinking about it", "No, but I plan to", "No, but I'm in the process of doing so", "Yes"))
+signup_raw = table(survey_res$signup_chars)
+signup_percent = paste0((round(table(survey_res$signup_chars)/sum(!is.na(survey_res$`Are.you.currently.signed.up.for.a.biostasis.procedure.such.as.cryonics...`)) * 100, 2)), "%")
+table_signup = cbind(Total = signup_raw, Percent = signup_percent, Quantification = c(1, 2, 3, 4, 5, 6))
+kable(table_signup)
+```
+
+For context, there's about 2000 people in the world who are signed up for cryonics.
+
+This is the main question used to quantify "interest in biostasis." The quantification column shows how the answers were converted to scores for correlation analysis.
+
+<b>Survey Question: Could you imagine electing to undergo some biostasis procedure at the time of your legal death?</b>
+
+```{r, echo = FALSE}
+survey_res$imagine_chars = factor(survey_res$could_imagine_cryo,
+  levels = c("No", "Most likely no", "Unsure", "Mostly likely yes", "Yes"))
+signup_raw = table(survey_res$imagine_chars)
+signup_percent = paste0((round(table(survey_res$imagine_chars)/sum(!is.na(survey_res$could_imagine_cryo)) * 100, 2)), "%")
+table_signup = cbind(Total = signup_raw, Percent = signup_percent, Quantification = c(1,2, 3,4,5))
+kable(table_signup)
+```
+
+<b>Survey Question: Some people have argued that patients with terminal illnesses should be allowed to start biostasis procedures just prior to legal death, in order to prevent further brain degradation. Do you think this should be allowed? </b>
+
+```{r, echo = FALSE}
+terminal_illness_table = sort(table(survey_res$terminal_illness), decreasing = TRUE)
+percent = paste0((round(terminal_illness_table/sum(!is.na(survey_res$terminal_illness)) * 100, 2)), "%")
+table_signup = cbind(
+  "Choice" = names(terminal_illness_table),
+  "Total Number" = terminal_illness_table,
+  "Percent" = percent, Quantification = c(1,2, 3,4,5))
+kable(table_signup, row.names = FALSE)
+```
+
+## Probability questions
+
+<b>Survey Question: What is your estimate of the probability that technology to sustain you in "eternal youth" will arrive before your death? I.e., that you will achieve longevity escape velocity. Answer on a scale from 0% (definitely false) to 100% (definitely true). </b>
+
+```{r, echo=FALSE, warning = FALSE, fig.height = 4, fig.width = 10}
+gm_mean = function(x, na.rm=TRUE){
+   exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+p1 = ggplot(survey_res, aes(x = eternal_youth)) + geom_density() + theme_bw() + xlab("Probability of reaching longevity escape velocity")
+p2 = ggplot(survey_res, aes(x = eternal_youth)) + geom_density() + theme_bw() + scale_x_continuous(trans='log10') + xlab("Probability of reaching longevity escape velocity (log10 scale)")
+plot_grid(p1, p2)
+print(paste0("Median probability: ", median(survey_res$eternal_youth, na.rm = TRUE), "%"))
+print(paste0("Geometric mean probability: ", round(gm_mean(survey_res$eternal_youth), 2), "%"))
+```
+
+<b>Survey Question: What is your estimate of the probability that a currently available biostasis procedure will in an ideal case preserve the information necessary for you to theoretically be revived in the far future? Independently of whether that revival will actually happen. Answer on a scale from 0% (definitely false) to 100% (definitely true).</b>
+
+```{r, echo=FALSE, warning = FALSE, fig.height = 4, fig.width = 10}
+p1 = ggplot(survey_res, aes(x = biostasis_info)) + geom_density() + theme_bw() + xlab("Probability of ideal case information preservation")
+p2 = ggplot(survey_res, aes(x = biostasis_info)) + geom_density() + theme_bw() + scale_x_continuous(trans='log10') + xlab("Probability of ideal case information preservation (log10 scale)")
+plot_grid(p1, p2)
+print(paste0("Median probability: ", median(survey_res$biostasis_info, na.rm = TRUE), "%"))
+print(paste0("Geometric mean probability: ", round(gm_mean(survey_res$biostasis_info), 2), "%"))
+```
+
+<b>Survey Question:What is your estimate of the probability the biostasis organization you choose will stay in existence and keep you in biostasis for at least 200 years or until you are able to be revived, whichever comes first? Answer on a scale from 0% (definitely false) to 100% (definitely true). </b>
+
+```{r, echo=FALSE, warning = FALSE, fig.height = 4, fig.width = 10}
+p1 = ggplot(survey_res, aes(x = biostasis_org_stability)) + geom_density() + theme_bw() + xlab("Probability of organization longevity")
+p2 = ggplot(survey_res, aes(x = biostasis_org_stability)) + geom_density() + theme_bw() + scale_x_continuous(trans='log10') + xlab("Probability of organization longevity (log10 scale)")
+plot_grid(p1, p2)
+print(paste0("Median probability: ", median(survey_res$biostasis_org_stability, na.rm = TRUE), "%"))
+print(paste0("Geometric mean probability: ", round(gm_mean(survey_res$biostasis_org_stability), 2), "%"))
+```
+
+<b>Survey Question: What is your estimate of the overall probability that an average person today who undergoes biostasis with an existing procedure and an existing biostasis organization will be successfully revived at some future time? Answer on a scale from 0% (definitely false) to 100% (definitely true).</b>
+
+```{r, echo=FALSE, warning = FALSE, fig.height = 4, fig.width = 10}
+p1 = ggplot(survey_res, aes(x = biostasis_work_prob)) + geom_density() + theme_bw() + xlab("Probability of biostasis working")
+p2 = ggplot(survey_res, aes(x = biostasis_work_prob)) + geom_density() + geom_density() + theme_bw() + scale_x_continuous(trans='log10') + xlab("Probability of biostasis working")
+plot_grid(p1, p2)
+print(paste0("Median probability: ", median(survey_res$biostasis_work_prob, na.rm = TRUE), "%"))
+print(paste0("Geometric mean probability: ", round(gm_mean(survey_res$biostasis_work_prob), 2), "%"))
+```
+
+On average, people estimated that there a 1 in 100 chance of biostasis working in an ideal case.
+
+One takeaway from these questions is that people assign a pretty high probability of personally reaching [longevity escape velocity](https://en.wikipedia.org/wiki/Longevity_escape_velocity) -- much higher than the average probability that they assign biostasis working in the ideal case (rank test p-value < 2.2e-16).
+
+One explanation from this survey that people may be not very interested in biostasis is that they think there is a good chance they will never die regardless of biostasis, because they are going to reach longevity escape velocity.
+
+Being very interested in biostasis requires someone who is starry eyed about some aspects of the future, but steely eyed about others. Emil Kendziorra, CEO at Tomorrow Biostasis, [has written](https://emilkendziorra.medium.com/my-next-20-years-towards-a-moonshot-10edd4bc3d0c) about why he thinks longevity escape velocity is (unfortunately!) unlikely to occur soon.
+
+## Knowledge about neuroscience and cryobiology
+
+The survey included 4 questions testing knowledge of neuroscience and 4 questions testing knowledge of cryobiology.
+
+```{r, echo = FALSE, warning = FALSE}
+table_questions = cbind("Number Correct" = names(table(survey_res$neuro_questions_correct)),
+  "Neuro Questions Raw" = table(survey_res$neuro_questions_correct),
+  "Neuro Questions Percent" = paste0((round(table(survey_res$neuro_questions_correct)/sum(!is.na(survey_res$neuro_questions_correct)) * 100, 2)), "%"),
+  "Cryo Questions Raw" = table(survey_res$cryo_questions_correct),
+  "Cryo Questions Percent" =  paste0((round(table(survey_res$cryo_questions_correct)/sum(!is.na(survey_res$cryo_questions_correct)) * 100, 2)), "%"))
+kable(table_questions, row.names = FALSE)
+```
+
+Only a few people got them all right:
+
+```{r, echo = FALSE, warning = FALSE}
+total_questions =  cbind("Number Correct" = names(table(survey_res$neuro_questions_correct)),
+  "Total Questions Raw" = table(survey_res$total_questions_correct),
+  "Total Questions Percent" =  paste0((round(table(survey_res$total_questions_correct)/sum(!is.na(survey_res$total_questions_correct)) * 100, 2)), "%"))
+kable(total_questions, row.names = FALSE)
+```
+
+Let's see how these scores correlate with one's profession, using age as a covariate.
+
+For this we will use a Bayesian linear model analysis because it does a good job of handling uncertainty including sample size. If you're interested in more details, see [here](https://mc-stan.org/rstanarm/reference/stan_glm.html) and [here](https://easystats.github.io/bayestestR/).
+
+As is typical with linear model analysis, the estimates for the factors are relative to one of the other factors. Here I chose general "white collar" as the reference group. By default, I adjust these linear models for age.
+
+### Accuracy on neuroscience questions
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE,fig.keep = "last", class.source = 'fold-hide'}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("neuro_questions_correct",
+   "Profession_whitecollar_ref_", "Age")]
+model_bayes_signup = stan_glm(neuro_questions_correct~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Accuracy on Neuroscience Questions") +
+  ylab("") + xlab("Score relative to a white collar professional")
+ggplot_res
+```
+
+People in neuroscience and health care did well on the neuroscience questions. People in economics and law did not do very well.
+
+### Accuracy on cryobiology questions
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE,fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("cryo_questions_correct",
+   "Profession_whitecollar_ref_", "Age")]
+model_bayes_signup = stan_glm(cryo_questions_correct~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Accuracy on Cryobiology Questions") + ylab("") + xlab("Score relative to a white collar professional")
+ggplot_res
+```
+
+People in physics and other "hard science" fields did well on the cryobiology questions.
+
+## The pro-biostasis belief cluster
+
+There is a cluster of pro-biostasis beliefs all positively correlated with one another: being more likely to be signed up or interested in it (quantification of "signup"), being more able to imagine it ("could imagine cryo"), assigning a higher probability it will work ("biostasis work prob"), assigning a higher probability of longevity escape velocity ("eternal youth"), assigning a higher probability that biostasis organizations will be stable enough for success ("biostasis org stability"),  assigning a higher probability that a currently available biostasis procedure will in an ideal case preserve the information necessary for you to theoretically be revived in the far future ("biostasis info"), and believing that people with a terminal illness should have the choice to pursue biostasis prior to legal death ("terminal illness").
+
+None of these beliefs were correlated with the number of correct answers on the four objective knowledge questions for neuroscience and cryobiology. The number of correct answers to the neuroscience and cryobiology knowledge questions were weakly correlated with one another (rho = 0.099, p = 6.9e-05).
+
+```{r, echo = FALSE}
+survey_res_pro_biostasis = survey_res[ , colnames(survey_res) %in%
+    c("signup_n", "could_imagine_cryo_n", "biostasis_work_prob", "biostasis_info", "eternal_youth", "biostasis_org_stability", "total_questions_correct", "cryo_questions_correct", "neuro_questions_correct", "terminal_illness_n", "Age")]
+survey_res_pro_biostasis_cors = cor(survey_res_pro_biostasis, method = "spearman", use = "na.or.complete")
+survey_res_pro_biostasis_pval = corr.test(survey_res_pro_biostasis, method = "spearman")$p
+corrplot(survey_res_pro_biostasis_cors, diag = F, order = "hclust", tl.col = 'black')
+```
+
+Notably, age is inversely correlated with all of the pro-biostasis belief questions, with the exception of one's support for people with a terminal illness having the choice to pursue biostasis prior to legal death. As a result, age is an important confound and it is adjusted for in the analyses in this essay, unless otherwise noted.
+
+How do the 45 people who report being actually signed up for biostasis differ from the rest of the respondents?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE}
+survey_res_signedup = survey_res[survey_res$signup_n == 6 & !is.na(survey_res$signup_n), ]
+survey_res_notsigned_up = survey_res[survey_res$signup_n != 6 & !is.na(survey_res$signup_n), ]
+wilcox.test(survey_res_signedup$cryo_questions_correct, survey_res_notsigned_up$cryo_questions_correct)
+wilcox.test(survey_res_signedup$neuro_questions_correct, survey_res_notsigned_up$neuro_questions_correct)
+```
+
+These 45 people do have significantly higher scores on the four questions about cryobiology than the rest of the respondents (average 2.6/4 correct vs 2.1/4, wilcox test p = 0.026). They're no better on the neuroscience questions. They assign a higher probability of biostasis working in the ideal case (12.3% vs 5.9%, wilcox test p = 1.3e-6). They assign a higher chance of reaching longevity escape velocity in their lifetimes (19.4% vs 11.6%, wilcox test p = 0.003). There is no difference in their average age. Regarding their profession, they're more likely to be in academic computer science, art, neuroscience, or economics:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$signedup_actual = as.numeric(survey_res$signup_n == 6)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signedup_actual",
+   "Profession_whitecollar_ref_", "Age")]
+model_bayes_signup = stan_glm(signedup_actual~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Professions of those who are signed up") +
+  ylab("") + xlab("Probability to be actually signed up, relative to white collar professionals")
+ggplot_res
+```
+
+## Why do people not want biostasis?
+
+<b>Survey Question: Regardless of whether you have already signed up, what is the strongest reason against electing for biostasis for yourself?</b>
+
+```{r, echo = FALSE}
+table_reasons = cbind(
+  "Main Reason Against" = names(rev(sort(table(survey_res$reason_against_clean)))),
+  "Number Choosing" = rev(sort(table(survey_res$reason_against_clean))),
+  "Percent" = paste0(round(rev(sort(table(survey_res$reason_against_clean)))/sum(!is.na(survey_res$reason_against_clean)) * 100, 2), "%"))
+kable(table_reasons, row.names = FALSE)
+```
+
+The biggest two concerns are the lack of scientific validation and the cost, followed by a concern about being revived in an unfavorable condition.
+
+<b>Survey Question: Which do you consider strong reasons against electing for biostasis for yourself? (Choose any and all that apply.).</b>
+
+```{r, echo = FALSE}
+reasons_ordered = c(
+  "There is not enough scientific validation that the procedure will preserve neural features necessary for long-term memory and identity",
+  "It is too expensive (most biostasis procedures currently cost around $30,000 - $200,000)",
+  "Long-term instability of the biostasis organization",
+  "I am worried about being revived in an unfavorable condition/state",
+  "It is a logistical hassle",
+"It is selfish (for example, due to overpopulation or unequal access)",  "Religious reasons",
+"I am worried about being socially unaccepted/ostracized due to my decision")
+total_n = sum(!is.na(survey_res$reason_against_clean))
+percent_choosing = c(
+  sum(survey_res$not_enough_scientific_support)/total_n,
+  sum(survey_res$too_expensive)/total_n,
+  sum(survey_res$long_term_org_instability)/total_n,
+  sum(survey_res$unfavorable_condition)/total_n,
+  sum(survey_res$logistical_hassle)/total_n,
+  sum(survey_res$selfish)/total_n,
+  sum(survey_res$religious_reasons)/total_n,
+  sum(survey_res$social_unacceptance)/total_n)
+table_other_reasons = cbind(
+  "Reason Against Biostasis" = reasons_ordered,
+  "Percent Choosing" = paste0(round((percent_choosing * 100), 2), "%"))
+kable(table_other_reasons, row.names = FALSE)
+```
+
+About half of the respondents list concern about being revived in an unfavorable condition/state as a reason to not pursue biostasis. Relative to someone in a generic "white collar" profession, this concern was more likely to be listed by people working in law:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$unfavorable_condition_n = as.numeric(survey_res$unfavorable_condition)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("unfavorable_condition_n",
+   "Profession_whitecollar_ref_", "Age")]
+model_bayes_signup = stan_glm(unfavorable_condition_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with unfavorable revival") +
+  ylab("") + xlab("Concern relative to white collar professionals")
+ggplot_res
+```
+
+Relative to someone living in a country with < 10 respondents, concern with unfavorable revival circumstances was more likely to be listed by people living in Ireland:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$unfavorable_condition_n = as.numeric(survey_res$unfavorable_condition)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("unfavorable_condition_n",
+   "country_clean_ref_Other_", "Age")]
+model_bayes_signup = stan_glm(unfavorable_condition_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("country_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with unfavorable revival") +
+  ylab("") + xlab("Concern relative to less populated countries")
+ggplot_res
+```
+
+Relative to someone living in a state with < 10 respondents, concern with unfavorable revival circumstances was more likely to be listed by people living in New York and Oregon:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$unfavorable_condition_n = as.numeric(survey_res$unfavorable_condition)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("unfavorable_condition_n",
+   "state_clean_ref_Other_", "Age")]
+model_bayes_signup = stan_glm(unfavorable_condition_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("state_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with unfavorable revival") +
+  ylab("") + xlab("Concern relative to less populated states")
+ggplot_res
+```
+
+Concern with unfavorable revival circumstances had no clear correlation with the number of children people have:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$unfavorable_condition_n = as.numeric(survey_res$unfavorable_condition)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("unfavorable_condition_n",
+   "Children",
+   "Age")]
+survey_res_lm$Children = gsub("0.125", NA, survey_res_lm$Children)
+survey_res_lm$Children = gsub("0.3", NA, survey_res_lm$Children)
+survey_res_lm$Children = gsub("0.5", NA, survey_res_lm$Children)
+survey_res_lm$Children = gsub("6", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("7", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("8", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("9", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("10", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("11", "6+", survey_res_lm$Children)
+survey_res_lm$Children = relevel(as.factor(survey_res_lm$Children), ref = "0")
+model_bayes_signup = stan_glm(unfavorable_condition_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Children", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with unfavorable revival by children") +
+  ylab("Number of children") + xlab("Concern relative to people with no children")
+ggplot_res
+```
+
+About half of the respondents list concern about being the organization's long-term stability as a reason to not pursue biostasis. Relative to someone in a generic "white collar" profession, this concern was less likely to be listed by people working in neuroscience:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$long_term_org_instability_n = as.numeric(survey_res$long_term_org_instability)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("long_term_org_instability_n",
+   "Profession_whitecollar_ref_", "Age")]
+model_bayes_signup = stan_glm(long_term_org_instability_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with long-term stability")  +
+  ylab("") + xlab("Concern relative to white collar professionals")
+ggplot_res
+```
+
+About 20% list a concern about biostasis being selfish. Relative to someone in a generic "white collar" profession, this concern was less likely to be listed by people working in economics, finance, business, law, and practical computer programming:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$selfish_n = as.numeric(survey_res$selfish)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("selfish_n",
+   "Profession_whitecollar_ref_", "Age")]
+model_bayes_signup = stan_glm(selfish_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with selfishness") +
+  ylab("") + xlab("Concern relative to white collar professionals")
+ggplot_res
+```
+
+Relative to someone living in a country with < 10 respondents, concern of selfishness was more likely to be listed by people living in Germany and to a lesser extent, the UK:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$selfish_n = as.numeric(survey_res$selfish)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("selfish_n",
+   "country_clean_ref_Other_", "Age")]
+model_bayes_signup = stan_glm(selfish_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("country_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with selfishness") +
+  ylab("") + xlab("Concern relative to less populated countries")
+ggplot_res
+```
+
+Relative to someone living in a state with < 10 respondents, concern of selfishness was less likely to be listed by people living in Arizona and New Hampshire:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$selfish_n = as.numeric(survey_res$selfish)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("selfish_n",
+   "state_clean_ref_Other_", "Age")]
+model_bayes_signup = stan_glm(selfish_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("state_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with selfishness")+
+  ylab("") + xlab("Concern relative to less populated states")
+ggplot_res
+```
+
+Based on the above results and the state motto “Live Free and Don’t Die,” New Hampshire seems primed for a biostasis organization.
+
+People of most political parties in the US are not concerned with selfishness, but members of the Libertarian party are particularly unconcerned:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$selfish_n = as.numeric(survey_res$selfish)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("selfish_n",
+   "American_party_ref_nonUS_", "Age")]
+model_bayes_signup = stan_glm(selfish_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("American_party_ref_nonUS_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with selfishness")+
+  ylab("") + xlab("Concern relative to non-US respondents")
+ggplot_res
+```
+
+People with a diagnosis or suspected self-diagnosis of ADHD or bipolar disorder are more likely to report a concern that signing up is a logistical hassle:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$logistical_hassle_n = as.numeric(survey_res$logistical_hassle)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("logistical_hassle_n",
+   "OCD_omni", "Depression_omni", "Anxiety_omni", "Schizophrenia_omni",
+   "Eating_disorder_omni", "PTSD_omni", "AlcoholUD_omni", "SubstanceUD_omni",
+   "Borderline_omni", "Bipolar_omni", "Autism_omni", "ADHD_omni",
+   "Age")]
+model_bayes_signup = stan_glm(logistical_hassle_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("_omni", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with logistics") +
+  ylab("") + xlab("Concern relative to people not reporting or suspecting this diagnosis")
+ggplot_res
+```
+
+Pretty much everyone is concerned about the lack of scientific support for biostasis (80% of people), and this is pretty evenly distributed across professions, with the exception of people working in media:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$not_enough_scientific_support_n = as.numeric(survey_res$not_enough_scientific_support)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("not_enough_scientific_support_n",
+   "Profession_whitecollar_ref_",
+   "Age")]
+model_bayes_signup = stan_glm(not_enough_scientific_support_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with lack of scientific support")+
+  ylab("") + xlab("Concern relative to white collar professionals")
+ggplot_res
+```
+
+Among educational degrees, people with an MD degree are particularly concerned about the lack of scientific support:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res$not_enough_scientific_support_n = as.numeric(survey_res$not_enough_scientific_support)
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("not_enough_scientific_support_n",
+   "Degree_bachelors_ref_",
+   "Age")]
+model_bayes_signup = stan_glm(not_enough_scientific_support_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Degree_bachelors_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concern with lack of scientific support") + ylab("") + xlab("Concern relative to people with a Bachelors degree")
+ggplot_res
+```
+
+## What might make people more interested in cryonics?
+
+Enough negativity. What do people say would make them _more_ interested in cryonics?
+
+<b>Survey Question: Imagine that your five closest friends or family members were all signed up for biostasis. How much would that affect your desire for signing up yourself?</b>
+
+```{r, echo=FALSE}
+update_table = sort(table(survey_res$imagine_closest_friends), decreasing = TRUE)
+percent = paste0((round(update_table/sum(!is.na(survey_res$imagine_closest_friends)) * 100, 2)), "%")
+table_update = cbind(
+  "Choice" = names(update_table),
+  "Total Number" = update_table,
+  "Percent" = percent, Quantification = c(1,2, 3,4,5))
+kable(table_update, row.names = FALSE)
+```
+
+I'm pretty surprised the answers here were not higher. Respondents don't seem to think they would be swayed much by strong social pressure.
+
+People working in statistics, business, finance, and AI report they would be most swayed by the apparent wisdom of their closest friends, whereas people in "blue collar" professions report they would be least swayed by this:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("imagine_closest_friends_n",
+   "Profession_whitecollar_ref_", "Age")]
+model_bayes_signup = stan_glm(imagine_closest_friends_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Conditional interest if closest friends/family signed up") + ylab("") + xlab("Relative conditional interest compared to white collar professionals")
+ggplot_res
+```
+
+How does this interact with people's concerns about biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("imagine_closest_friends_n",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(imagine_closest_friends_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("TRUE", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Conditional interest if closest friends/family signed up") + ylab("") + xlab("Relative conditional interest compared to people without this concern")
+ggplot_res
+```
+
+As expected, people who are concerned about social ostracism would be much more interested in biostasis if their closest friends/family signed up.
+
+People who report having a concern about revival in an unfavorable condition/state also report they would be much more interested if closest friends or family members signed up. To me this is a very important result and gets at part of the psychology behind the unfavorable revival concern. It suggests that part of this concern is driven by doing a weird thing that nobody around them does, possibly making them feel "isolated from the tribe."
+
+<b>Survey Question: Imagine that choosing the biostasis procedure were free. How much would that affect your desire for signing up yourself?</b>
+
+```{r, echo=FALSE}
+update_table = sort(table(survey_res$imagine_free), decreasing = TRUE)
+percent = paste0((round(update_table/sum(!is.na(survey_res$imagine_free)) * 100, 2)), "%")
+table_update = cbind(
+  "Choice" = names(update_table),
+  "Total Number" = update_table,
+  "Percent" = percent, Quantification = c(1,2,3,4,5))
+kable(table_update, row.names = FALSE)
+```
+
+How does the hypothetical possibility of free biostasis interact with people's concerns about biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("imagine_free_n",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(imagine_free_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("TRUE", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Conditional interest if biostasis were free") + ylab("") + xlab("Relative conditional interest compared to people without this concern")
+ggplot_res
+```
+
+As expected, if people are concerned about the cost, then they tend to be stoked about the idea that it could be free. People who are concerned for religious reasons, selfishness, or unfavorable revival conditions tend not to care as much.
+
+<b>Survey Question: Imagine that a consensus of neuroscientists thought that an available biostasis procedure would almost certainly preserve the information content of long-term memories. How much would that affect your desire for signing up yourself? </b>
+
+```{r, echo=FALSE}
+update_table = sort(table(survey_res$imagine_LTM), decreasing = TRUE)
+percent = paste0((round(update_table/sum(!is.na(survey_res$imagine_LTM)) * 100, 2)), "%")
+table_update = cbind(
+  "Choice" = names(update_table),
+  "Total Number" = update_table,
+  "Percent" = percent, Quantification = c(1,2, 3,4,5))
+kable(table_update, row.names = FALSE)
+```
+
+How does this interact with people's concerns about biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("imagine_LTM_n",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(imagine_LTM_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("country_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Conditional interest if more neuroscience evidence") + ylab("") + xlab("Relative conditional interest compared to people without this concern")
+ggplot_res
+```
+
+As expected, if people are concerned about a lack of scientific support, then they report they would be more interested if a consensus of neuroscientists thought it would preserve the information content of long-term memories.
+
+People with what sorts of politics would be most swayed by more neuroscientist support?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("imagine_LTM_n",
+   "American_party_ref_nonUS_", "Age")]
+model_bayes_signup = stan_glm(imagine_LTM_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("American_party_ref_nonUS_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Conditional interest if more neuroscience evidence") + ylab("") + xlab("Relative conditional interest compared to non-US respondents")
+ggplot_res
+```
+
+Among people in the US, members of the Democratic party report that they would "follow the science"; Republicans, not as much. However, this result is confounded by overall interest in biostasis.
+
+<b>Survey Question: Imagine that it were possible to preserve and revive a very small mammal. How much would that affect your desire for signing up yourself?</b>
+
+```{r, echo=FALSE}
+update_table = sort(table(survey_res$imagine_mammal), decreasing = TRUE)
+percent = paste0((round(update_table/sum(!is.na(survey_res$imagine_mammal)) * 100, 2)), "%")
+table_update = cbind(
+  "Choice" = names(update_table),
+  "Total Number" = update_table,
+  "Percent" = percent, Quantification = c(1,2, 3,4,5))
+kable(table_update, row.names = FALSE)
+```
+
+How does this interact with people's concerns about biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("imagine_mammal_n",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(imagine_mammal_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("country_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Conditional interest if small mammal revived") + ylab("") + xlab("Relative conditional interest compared to people without this concern")
+ggplot_res
+```
+
+The people with relatively more enthusiasm for the small mammal revival hypothetical are similar to those with more enthusiasm for the previous hypothetical about increasing neuroscientist support for biostasis.
+
+## What type of person is interested in biostasis?
+
+How does someone's biggest concern about biostasis relate to their interest in it? The reference group in this plot is people who are most concerned about unfavorable revival conditions:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "reason_against_clean",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("reason_against_clean", "", result_plot$data$y)
+result_plot$data$y = gsub("There is not enough scientific validation that the procedure will preserve neural features necessary for long-term memory and identity", "Not enough scientific validation", result_plot$data$y)
+result_plot$data$y = gsub("It is too expensive (most biostasis procedures currently cost around $30,000 - $200,000)", "Too expensive", result_plot$data$y, fixed = TRUE)
+result_plot$data$y = gsub("I am worried about being socially unaccepted/ostracized due to my decision", "Worried about social ostracism", result_plot$data$y)
+result_plot$data$y = gsub("It is selfish (for example, due to overpopulation or unequal access)", "It is selfish", result_plot$data$y, fixed = TRUE)
+result_plot$data$y = gsub("Long-term instability of biostasis organization", "Instability of the organization", result_plot$data$y, fixed = TRUE)
+ggplot_res = plot(result_plot) + ggtitle("Interest by biggest concern") + xlab("Interest compared to most concerned about unfavorable revival") + ylab("")
+ggplot_res
+```
+
+This suggests that there are three categories of views why people wouldn't want to do biostasis:
+
+* Group 1 - "Fat chance". Their biggest concern is religious reasons or they consider it selfish. These people are pretty uninterested and are probably not going to be swayed.
+* Group 2 - "Meh". Their biggest concern is a lack of scientific validation of long-term memory/identity or concern about being revived in an unfavorable state/condition (the reference level/group in the chart above, so not shown, but basically tied with people concerned about a lack of scientific validation). They might be interested, but it would take a lot more evidence or planning on how to avoid an unfavorable outcome.
+* Group 3 - "Need to go the last mile." Their biggest concerns are that it is a logistical hassle, the organization might not last, it is expensive, or they're worried about social ostracism (this last group is very small). People who have these things as their biggest concern are probably more easily convinced if this issue were addressed. Arguably, efforts in these areas might have the highest return on investment from the perspective of getting more people to sign up.
+
+What is the correlation between gender and interest in biostasis? Cisgender men, transgender women, and people with other genders are more interested in biostasis relative to cisgender women:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Gender",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Gender", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by gender") + xlab("Relative interest compared to cisgender women") + ylab("")
+ggplot_res
+```
+
+What is the correlation between self-identified race and interest in biostasis? Relative to people who identify as non-Hispanic white, people who identify as Hispanic seem to be slightly less interested in signing up for biostasis:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Race",
+   "Age")]
+survey_res_lm$Race = relevel(as.factor(survey_res_lm$Race), ref = "White (non-Hispanic)")
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Race", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by self-identified race") + xlab("Relative interest compared to people identifying as non-Hispanic white") + ylab("")
+ggplot_res
+```
+
+What is the correlation between sexual orientation and interest in biostasis? Compared to people who are heterosexual, people who are bisexual seem to be more interested in biostasis:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Sexual.Orientation",
+   "Age")]
+survey_res_lm$Sexual.Orientation = relevel(as.factor(survey_res_lm$Sexual.Orientation), ref = "Heterosexual")
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Sexual.Orientation", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by sexual orientation") + xlab("Relative interest compared to people who are heterosexual") + ylab("")
+ggplot_res
+```
+
+What is the correlation between relationship status and interest in biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Relationship.Status",
+   "Age")]
+survey_res_lm$Relationship.Status = relevel(as.factor(survey_res_lm$Relationship.Status), ref = "Single")
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Relationship.Status", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by relationship status") + xlab("Relative interest compared to people who identify as single") + ylab("")
+ggplot_res
+```
+
+Compared to people who are single, people who are "in a relationship" (but presumably not married, since the question requires choosing one or the other) are more interested in biostasis. This is completely reversed for people who are married. Not the strongest correlations and maybe a "traditional values"/conservatism confound.
+
+What is the relative interest in biostasis of people with children?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Children",
+   "Age")]
+survey_res_lm$Children = gsub("0.125", NA, survey_res_lm$Children)
+survey_res_lm$Children = gsub("0.3", NA, survey_res_lm$Children)
+survey_res_lm$Children = gsub("0.5", NA, survey_res_lm$Children)
+survey_res_lm$Children = gsub("6", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("7", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("8", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("9", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("10", "6+", survey_res_lm$Children)
+survey_res_lm$Children = gsub("11", "6+", survey_res_lm$Children)
+survey_res_lm$Children = relevel(as.factor(survey_res_lm$Children), ref = "0")
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Children", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by number of children") + xlab("Relative interest compared to people with no children") + ylab("Number of children")
+ggplot_res
+```
+
+There is a negative correlation with interest and biostasis and number of children. This peaks at 4 children and then seems to reverse for people with 6+ children, who maybe just love life (high error bars on the trend reversal and probably not true, but kind of fun to think about).
+
+How does one's degree correlate with interest in biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Degree_bachelors_ref_",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Degree_bachelors_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by degree") + xlab("Relative interest compared to Bachelors degree") + ylab("")
+ggplot_res
+```
+
+People with a JD are the most uninterested in biostasis. People with no degree or a high school degree are the most interested. As with all analyses, this model includes age as a covariate.
+
+How does one's profession correlate with interest in biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Profession_whitecollar_ref_",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Profession_whitecollar_ref_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by profession") + xlab("Relative interest compared to white collar workers") + ylab("")
+ggplot_res
+```
+
+People who work in math and computers are the most interested in biostasis.
+
+How does one's work status correlate with interest in biostasis? Relative interest compared to academics (on the teaching side):
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Work.Status",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Work.Status", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by work status") + xlab("Relative interest compared academics on the teaching side") + ylab("")
+ggplot_res
+```
+
+What countries contain people that are more interested in biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "country_clean_ref_Other_",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("country_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by country") + xlab("Relative interest compared to less populated countries") + ylab("")
+ggplot_res
+```
+
+Based on this small sample with appropriately large error bars, the strongest potential markets are Israel and Sweden. Looks like [Cryonics Israel](https://cryonics.co.il/en/who-we-are/) is a non-profit planning to grow and eventually start an organization there; on the other hand, as of 2004, it seems like interest in cryonics in Sweden was [quite low](http://www.cryonet.org/cgi-bin/dsp.cgi?msg=23692).
+
+People living in the UK seem to be among the least interested in biostasis. That seems to fit with the relative lack of members/organizations in the UK compared to the US. People living in France, where cryonics is illegal, are also less interested.
+
+What states in the US have people most interested in biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "state_clean_ref_Other_",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("state_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by state") + xlab("Relative interest compared to less populated states") + ylab("")
+ggplot_res
+```
+
+For the most part, the states with people most interested tend to be blue states, such as California, Oregon, and New York. There are also some stand out purple states, such as Michigan and New Hampshire, wherein people are more interested.
+
+How does political ideology correlate with interest in biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Political_Affiliation_ref_socialdemocrat_", "Age")]
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example France's National Front: nationalist revival with an ethnic/racial component", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example the US Republican Party and UK Tories: low taxes, low redistribution of wealth,  traditional values", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example the US Democratic Party : market economy plus social welfare, socially permissive multiculturalism", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example like the US Libertarian Party: socially permissive, minimal/no taxes, minimal/no distribution of wealth", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example various Communist Parties", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example Singapore: prosperity, technology, and stability more important than democratic process", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example Scandinavian countries: heavily-regulated market economy, cradle-to-grave social safety net, socially permissive multiculturalism", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = relevel(as.factor(survey_res_lm$Political_Affiliation_ref_socialdemocrat_), ref = "Marxist")
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Political_Affiliation_ref_socialdemocrat_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by political ideology") + ylab("") + xlab("Relative conditional interest compared to Marxists")
+ggplot_res
+```
+
+Relative to people with marxist politics, people with liberal, libertarian, and neoreactionary politics report the most interest in biostasis. On the other hand, people with conservative and alt-right politics are less interested.
+
+How does religiosity correlate with interest in biostasis? People who report atheist and non-spiritual religious views tend to have the most interest in biostasis:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Religious_Views_Agnostic_refe_",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Religious_Views_Agnostic_refe_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by religious views") + xlab("Relative interest compared to people with agnostic religious views") + ylab("")
+ggplot_res
+```
+
+Which religious groups are most interested in biostasis? People with a religion of Unitarian Universalism or similiar tend to be more interested in biostasis:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "religious_denom_ref_WriteIn_",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("religious_denom_ref_WriteIn_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by religious denomination") + xlab("Relative interest compared to write-in religious denominations") + ylab("")
+ggplot_res
+```
+
+How does interest in biostasis interact with having a psychiatric diagnosis? People with a diagnosis of bipolar disorder and autism are more interested in biostasis, while those with a diagnosis of depression are less interested:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "OCD_dx", "Depression_dx", "Anxiety_dx", "Schizophrenia_dx",
+   "Eating_disorder_dx", "PTSD_dx", "AlcoholUD_dx", "SubstanceUD_dx",
+   "Borderline_dx", "Bipolar_dx", "Autism_dx", "ADHD_dx",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("_dx", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by psychiatric diagnosis") + xlab("Relative interest of those with compared to without this diagnosis") + ylab("")
+ggplot_res
+```
+
+How does length of time reading ACX/SSC correlate with one's interest in cryonics?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "Length.of.Time",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Length.of.Time", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by length of time reading SSC/ACX") + xlab("Relative interest compared to less than a month") + ylab("")
+ggplot_res
+```
+
+People who have read ACX/SSC for longer tend to be more interested in it. Notably, Scott doesn't talk about biostasis/cryonics all that much, although it is clearly a canonical "rationalist"/LW/ACX/SSC memeplex-affiliated belief, going back to the Overcoming Bias days.
+
+Speaking of where one has learned about biostasis, how does one's reported main knowledge source relate to one's interest in it? The reference level here is getting one's knowledge from books. Which books? I have no idea. In my opinion, there really isn't a great, widely read book about cryonics/biostasis out there.
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("signup_n",
+   "knowledge_source_cleaned_ref_books_",
+   "Age")]
+model_bayes_signup = stan_glm(signup_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("knowledge_source_cleaned_ref_books_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Interest in biostasis by knowledge source") + xlab("Relative interest compared to books") + ylab("")
+ggplot_res
+```
+
+There are a few takeaways here:
+
+* Completely unsurprising that learning about biostasis from cryonics organizations is associated with increased interested in it.
+* Learning about biostasis from random websites online is kind of the classic stereotype, which is someone who is interested in things off the beaten path.
+* Among the write-ins, most people mentioned LW/SSC/ACX or the [WBW article](https://waitbutwhy.com/2016/03/cryonics.html).
+* People who haven't heard about it tend to not be as interested, which is kind of encouraging because it suggests that more outreach could be helpful.
+* TV, film, or YouTube is associated with low interest -- maybe these people only heard of it in a joke reference or something like Futurama or Austin Powers but haven't learned why some people think it's actually a good idea.
+* Perhaps the most interesting finding to me is that people who learned about it from their friends, coworkers, or relatives are relatively more interested in it. In practice, it seems that social proof is powerful.
+
+## What types of factors push people to different organizations?
+
+<b>Survey Question: If you are considering or signed up for biostasis, which organization would you choose/have you chosen? </b>
+
+Here are the choices that had >= 10 answers:
+
+```{r, echo = FALSE}
+survey_res_organization = survey_res[!is.na(survey_res$organization_cleaned_ref_nanone_) & survey_res$organization_cleaned_ref_nanone_ != "Not applicable/none", ]
+table_reasons = cbind(
+  "Organization" = names(rev(sort(table(survey_res_organization$organization_cleaned_ref_nanone_)))),
+  "Number Choosing" = rev(sort(table(survey_res_organization$organization_cleaned_ref_nanone_))),
+  "Percent" = paste0(round(rev(sort(table(survey_res_organization$organization_cleaned_ref_nanone_)))/sum(!is.na(survey_res_organization$organization_cleaned_ref_nanone_)) * 100, 2), "%"))
+table_reasons = table_reasons[-7, ]
+kable(table_reasons, row.names = FALSE)
+```
+
+Alcor is far and away the top choice. Tomorrow Biostasis is the big new option on the scene, having only started a couple of years ago. The Other category is not very informative since it is includes many write-ins of "I don't know, I need to do research" or something similar.
+
+What are the relative concerns of people interested in Alcor?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_organization$interest_in_alcor = as.numeric(ifelse(survey_res_organization$organization_cleaned_ref_nanone_ == "Alcor (Scottsdale, Arizona, USA)", 1, 0))
+survey_res_lm = survey_res_organization[ , colnames(survey_res_organization) %in%
+  c("interest_in_alcor",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(interest_in_alcor~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("TRUE", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concerns about biostasis by interest in Alcor") + xlab("Relative interest compared to people interested in another organization") + ylab("")
+ggplot_res
+```
+
+People interested in Alcor are more concerned lack of social acceptance and less concerned about it being selfish. Worth noting that Alcor is one of the more expensive options available.
+
+How about the second largest organization, Cryonics Institute?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_organization$interest_in_ci = as.numeric(ifelse(survey_res_organization$organization_cleaned_ref_nanone_ == "Cryonics Institute (Clinton Township, Michigan, USA)", 1, 0))
+survey_res_lm = survey_res_organization[ , colnames(survey_res_organization) %in%
+  c("interest_in_ci",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(interest_in_ci~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("TRUE", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concerns about biostasis by interest in Cryonics Institute") + xlab("Relative interest compared to people interested in another organization") + ylab("")
+ggplot_res
+```
+
+People interested in Cryonics Institute are not as concerned about biostasis being expensive, perhaps because it is one of the less expensive options available, at around $30,000. They are also less concerned about the lack of scientific validity.
+
+How about the third largest organization, Tomorrow Biostasis?
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_organization$interest_in_tb  = as.numeric(ifelse(survey_res_organization$organization_cleaned_ref_nanone_ == "Tomorrow Biostasis (Berlin, Germany)", 1, 0))
+survey_res_lm = survey_res_organization[ , colnames(survey_res_organization) %in%
+  c("interest_in_tb",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(interest_in_tb~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("TRUE", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Concerns about biostasis by interest in Tomorrow Biostasis") + xlab("Relative interest compared to people interested in another organization") + ylab("")
+ggplot_res
+```
+
+People interested in Tomorrow Biostasis tend to be more concerned about selfishness, which is consistent with the organization being in Germany and that being a major concern of people living in Germany. They also tend to be less concerned about it being a logistical hassle to sign up, which may be because Tomorrow Biostasis has made the sign up process so easy.
+
+## Legal question: who is for against biostasis for people with a terminal illness?
+
+How does political ideology correlate with supporting people's option to choose biostasis in the case of a terminal illness? Relative to people with marxist politics, people who with conservative, alt-right, or neoreactionary politics tend to not support people having the option to choose biostasis if they have a terminal illness:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("terminal_illness_n",
+   "Political_Affiliation_ref_socialdemocrat_", "Age")]
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example France's National Front: nationalist revival with an ethnic/racial component", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example the US Republican Party and UK Tories: low taxes, low redistribution of wealth,  traditional values", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example the US Democratic Party : market economy plus social welfare, socially permissive multiculturalism", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example like the US Libertarian Party: socially permissive, minimal/no taxes, minimal/no distribution of wealth", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example various Communist Parties", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example Singapore: prosperity, technology, and stability more important than democratic process", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = gsub(", for example Scandinavian countries: heavily-regulated market economy, cradle-to-grave social safety net, socially permissive multiculturalism", "", survey_res_lm$Political_Affiliation_ref_socialdemocrat_, fixed = TRUE)
+survey_res_lm$Political_Affiliation_ref_socialdemocrat_ = relevel(as.factor(survey_res_lm$Political_Affiliation_ref_socialdemocrat_), ref = "Marxist")
+model_bayes_signup = stan_glm(terminal_illness_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Political_Affiliation_ref_socialdemocrat_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Support legality of biostasis in terminal illness by political ideology") + ylab("") + xlab("Relative support compared to people with Marxist politics")
+ggplot_res
+```
+
+How about US political parties? Among US parties, Libertarians and Democrats tend to be in favor of this, while Republicans are not in favor:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("terminal_illness_n",
+   "American_party_ref_nonUS_",
+   "Age")]
+model_bayes_signup = stan_glm(terminal_illness_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("American_party_ref_nonUS_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Support legality of biostasis in terminal illness") + xlab("Relative support compared to non-US respondents") + ylab("")
+ggplot_res
+```
+
+There's also a fairly strong correlation for religious views. Relative to agnostic people, committed theists tend to be against the option to choose biostasis in the case of terminal illness:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("terminal_illness_n",
+   "Religious_Views_Agnostic_refe_",
+   "Age")]
+model_bayes_signup = stan_glm(terminal_illness_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("Religious_Views_Agnostic_refe_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Support biostasis choice in terminal illness") + xlab("Relative support compared to people with agnostic religious views") + ylab("")
+ggplot_res
+```
+
+Which seems to be driven largely by Christian groups:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("terminal_illness_n",
+   "religious_denom_ref_WriteIn_",
+   "Age")]
+model_bayes_signup = stan_glm(terminal_illness_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("religious_denom_ref_WriteIn_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Support biostasis choice in terminal illness by religion") + xlab("Relative support compared to write-in religous denomination") + ylab("")
+ggplot_res
+```
+
+State-level support seems to track pretty well with medical assistance in dying laws: people living in Oregon, California, New Jersey, etc are in favor.
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("terminal_illness_n",
+   "state_clean_ref_Other_",
+   "Age")]
+model_bayes_signup = stan_glm(terminal_illness_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("state_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Support biostasis choice in terminal illness") + xlab("Relative support compared to people in less populated states") + ylab("")
+ggplot_res
+```
+
+One would hope that our libertarian-leaning state New Hamsphire would be even higher (and it's certainly not low), but for whatever reason medical assistance in dying laws [have not done well](https://deathwithdignity.org/states/new-hampshire/) in New Hampshire.
+
+In terms of country-level support, these are the trends:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("terminal_illness_n",
+   "country_clean_ref_Other_",
+   "Age")]
+model_bayes_signup = stan_glm(terminal_illness_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("country_clean_ref_Other_", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Support biostasis choice in terminal illness") + xlab("Relative support compared to people in less populated countries") + ylab("")
+ggplot_res
+```
+
+This is odd considering that people living in Israel and Sweden seemed to be more interested in biostasis in general. There may be some deeper cultural differences.
+
+Among respondents who say that people should not be allowed to choose biostasis in the case of a terminal illness, their concerns about biostasis tend to be because of religious reasons and/or because they consider it selfish:
+
+```{r, echo = FALSE, results='hide', message=FALSE, warning = FALSE, fig.keep = "last"}
+survey_res_lm = survey_res[ , colnames(survey_res) %in%
+  c("terminal_illness_n",
+   "unfavorable_condition", "social_unacceptance", "logistical_hassle",
+   "selfish", "too_expensive", "religious_reasons",  "long_term_org_instability", "not_enough_scientific_support", "Age")]
+model_bayes_signup = stan_glm(terminal_illness_n~., data=survey_res_lm, seed=111)
+result = p_direction(model_bayes_signup)
+result = result[!result$Parameter == "Age", ]
+result_plot = plot(result)
+result_plot$data$y = gsub("TRUE", "", result_plot$data$y)
+ggplot_res = plot(result_plot) + ggtitle("Support biostasis choice in terminal illness") + xlab("Relative support compared to those concerned about unfavorable revival") + ylab("")
+ggplot_res
+```
+
+## Conclusions
+
+Here are a few overall take-aways:
+
+1\. I was surprised by the consistency/strength of the negative association between people with conservative viewpoints and having less interest in biostasis/less support for other people's choices regarding it. Biostasis is generally a liberal/libertarian thing.
+
+2\. Reading the write-in answers, I was surprised by the number of people who said that they did not want biostasis because they did not want to live any longer. Several people specifically noted that they did not want to live any longer because they were depressed. This may reflect the association in this sample between depression and lower interest in biostasis. I should add something about this as an option the next time the survey is run.
+
+3\. A solid half of the respondents noted a concern about revival in an unfavorable condition/state as a reason to not pursue biostasis. And this was the third most common main concern. For the next survey, I think a question could try to parse this into more detailed categories.
+For example, an additional question could be: <i> If you are concerned about revival in an unfavorable condition/state, what in particular are you most worried about? </i>
+
+a) Not applicable, I'm not particularly concerned about this
+b) I'm concerned about society being too similar to how it is now, so I'd still have to work, would still be depressed, would still have chronic pain, or something similar
+c) I'm concerned about only being revived for an instrumental purpose, so I would be in labor camp-like situation, forced to undergo experimentation, or something similar
+d) I'm concerned about being revived in a dystopian/hell-world scenario of constant torture, or something similar
+
+Also, I'd be curious to see if the option of being removed from biostasis under certain circumstances would help allay this concern at all:
+
+<i> For people concerned about revival in an unfavorable condition/state, imagine that your biostasis organization offered you the ability to direct removal from conservation under certain circumstances or to allow revival only under certain circumstances. Do you think this option would allay your concern about revival in an unfavorable condition/state? </i>
+
+a) Not applicable, I'm not particularly concerned about this
+b) Strongly disagree
+c) Disagree slightly
+d) Neutral/Unsure
+e) Slightly agree
+f) Strongly agree
+
+<i> Write in: If you are concerned about revival in an unfavorable condition/state, is there anything you can imagine that might allay this concern? </i>
+
+For more on this topic, which I think is underdiscussed, [see this more detailed essay](https://www.lesswrong.com/posts/WgypBZ3ahvKimifyY/why-i-think-worse-than-death-outcomes-are-not-a-good-reason).
+
+4\. Looking at the results of this survey, it is striking the degree to which interest in computers, math, and computer science is associated with interest in biostasis, even within the ACX community.
+
+The vast majority of people in the world are not signed up for cryonics. Only about 2000 in 7.6 billion people, or 0.0000263%. Whereas if you're an academic computer scientist who responds to ACX surveys, the probability is about 10%, which is 380,000 times higher.
+
+So instead of trying to explain the ideas behind cryobiology and neuroscience, perhaps people interested in promoting biostasis should be explaining the ideas behind computer science and trying to get people to read ACX. In other words, perhaps it really is true that P(A|B) = [P(A)*P(B|A)]/P(B), and all the rest is commentary.
